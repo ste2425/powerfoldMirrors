@@ -1,7 +1,14 @@
 #include "Timer.h"
 
+#include <global.h>
+#include <Canbus.h>
 #include <defaults.h>
 #include <global.h>
+#include <mcp2515.h>
+#include <mcp2515_defs.h>
+
+unsigned char highSpeed = CANSPEED_500;
+unsigned char lowSpeed = CANSPEED_250;
 
 // states
 bool ignitionActive = false;
@@ -12,8 +19,6 @@ bool mirrorsOpen = false;
 Timer mirrorTransitionTimer;
 int mirrorTransitionEvent;
 
-const int openPin = 2;    
-const int closePin = 3;
 const int ignitionPin = 4;
 
 const int openMirrorMotorPin = 7;
@@ -22,9 +27,12 @@ const int closeMirrorMotorPin = 8;
 void setup() {
   Serial.begin(9600);
   Serial.println("Starter");
+  
+  if(Canbus.init(highSpeed))  //Initialise MCP2515 CAN controller at the specified speed
+    Serial.println("CAN Init ok");
+  else
+    Serial.println("Can't init CAN");
     
-  pinMode(openPin, INPUT_PULLUP);
-  pinMode(closePin, INPUT_PULLUP);
   pinMode(ignitionPin, INPUT_PULLUP);
   
   pinMode(openMirrorMotorPin, OUTPUT);
@@ -36,24 +44,28 @@ void setup() {
 
 void loop() {
   mirrorTransitionTimer.update();
-  updateStatesFromMessage();
+  
+  if (!mcp2515_check_message())
+    return;
+  
+  tCAN message;
+
+  if (mcp2515_get_message(&message))
+    updateStatesFromMessage(&message);  
 
   updateMirrors();
 }
 
 // This needs to read from CAN data
-void updateStatesFromMessage() {
+void updateStatesFromMessage(tCAN *msg) {
   // do some stuff to check if message means ignition or doors etc
-  int openState = digitalRead(openPin);
-  int closeState = digitalRead(closePin);
   int ignitionState = digitalRead(ignitionPin);
 
-  if (openState == LOW)
-    doorsLocked = false;
-  else if (closeState == LOW)
-    doorsLocked = true;
-
   ignitionActive = ignitionState == LOW;
+
+  if (msg->id == 210) {
+    doorsLocked = msg->data[0] == 32;
+  }
 }
 
 
