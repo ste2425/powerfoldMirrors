@@ -8,7 +8,8 @@
 #include <mcp2515_defs.h>
 
 unsigned char highSpeed = CANSPEED_500;
-unsigned char lowSpeed = CANSPEED_250;
+unsigned char midSpeed = CANSPEED_250;
+unsigned char lowSpeed = CANSPEED_125;
 
 // states
 bool ignitionActive = false;
@@ -28,7 +29,7 @@ void setup() {
   Serial.begin(9600);
   Serial.println("Starter");
   
-  if(Canbus.init(highSpeed))  //Initialise MCP2515 CAN controller at the specified speed
+  if(Canbus.init(lowSpeed))
     Serial.println("CAN Init ok");
   else
     Serial.println("Can't init CAN");
@@ -63,8 +64,16 @@ void updateStatesFromMessage(tCAN *msg) {
 
   ignitionActive = ignitionState == LOW;
 
-  if (msg->id == 210) {
-    doorsLocked = msg->data[0] == 32;
+  /*
+    Message with id 528 appears to relate to door locking.
+    Data block zero relates to door lock status
+        64 - open
+        32 - locked
+        96 - deadlocked
+    Data block one appears to be a counter incrememting every time an ation occurs.
+  */
+  if (msg->id == 528) {
+    doorsLocked = msg->data[0] != 64;
   }
 }
 
@@ -98,6 +107,7 @@ void stop() {
   digitalWrite(closeMirrorMotorPin, HIGH);
 }
 
+// TODO: openMirrors and closeMirrors are virtually identitcal. This can be refactored to remove the duplication.
 void openMirrors() {
   if (mirrorsOpen) {
     Serial.println("mirrors already open or opening");
